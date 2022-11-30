@@ -1,0 +1,13 @@
+port: <PORT>
+host: <HOST>
+licenseCompany: <LICENSE_COMPANY>
+licenseKey: <LICENSE_KEY>
+idCookieName: <COOKIE_NAME>
+idCookieSecret: <COOKIE_SECRET>
+corsOrigins:
+  - <ORIGIN_ONE>
+  - <ORIGIN_TWO>
+corsMethods:
+  - <ALLOWED_CORS_HTTP_METHOD>
+reportAccessToken: <REPORT_ACCESS_TOKEN>
+redisConnectionString: <REDIS_CONNECTION_STRING>

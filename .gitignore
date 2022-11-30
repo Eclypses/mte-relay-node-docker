@@ -1,0 +1,8 @@
+node_modules/
+logs/
+*.tgz
+mte-relay-config.yml
+package-lock.json
+Dockerfile
+.dockerignore
+uploads
