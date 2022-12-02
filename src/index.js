@@ -44,12 +44,14 @@ startupChecks();
 const hasRedisUrl = Boolean(REDIS_URL);
 let redisClient = null;
 if (hasRedisUrl) {
-  redisClient = createClient({
-    url: REDIS_URL,
-  });
-  redisClient.connect().then(() => {
-    console.log(`Connected to Redis`);
-  });
+  redisClient = createClient();
+  redisClient
+    .connect({
+      url: REDIS_URL,
+    })
+    .then(() => {
+      console.log(`Connected to Redis`);
+    });
 }
 
 // initialize MTE Wasm
@@ -133,6 +135,12 @@ server.get(`/api/echo/:msg`, (req, res, next) => {
     message: `Echo: ${req.params.msg}`,
   });
 });
+
+// fetch('http://localhost:3099/api/unique-devices-report', {
+//   headers: {
+//     authorization: 'Sg1hwXKl7kUTkz4w7TqhA1LhOeBm75f5'
+//   }
+// })
 
 // Unique devices report
 server.get("/api/unique-devices-report", async (req, res, next) => {
