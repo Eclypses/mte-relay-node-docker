@@ -44,14 +44,12 @@ startupChecks();
 const hasRedisUrl = Boolean(REDIS_URL);
 let redisClient = null;
 if (hasRedisUrl) {
-  redisClient = createClient();
-  redisClient
-    .connect({
-      url: REDIS_URL,
-    })
-    .then(() => {
-      console.log(`Connected to Redis`);
-    });
+  redisClient = createClient({
+    url: REDIS_URL,
+  });
+  redisClient.connect().then(() => {
+    console.log(`Connected to Redis`);
+  });
 }
 
 // initialize MTE Wasm
@@ -69,7 +67,7 @@ instantiateMteWasm({
   takeState: hasRedisUrl
     ? async function customTakeState(id) {
         const value = await redisClient.get(id);
-        await redisClient.delete(id);
+        await redisClient.del(id);
         return value;
       }
     : undefined,
