@@ -6,3 +6,5 @@ package-lock.json
 Dockerfile
 .dockerignore
 uploads
+mte-relay-config.yaml
+.npmrc

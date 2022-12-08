@@ -88,24 +88,22 @@ server.use(
     origin: CORS_ORIGINS,
     methods: CORS_METHODS,
     credentials: true,
-    exposedHeaders: [MTE_ID_HEADER],
+    exposedHeaders: [MTE_ID_HEADER, MTE_ENCODED_CONTENT_TYPE_HEADER_NAME],
   })
 );
-
-// append "x-mte-id" header to all out going responses
-server.use((_req, res, next) => {
-  res.setHeader(MTE_ID_HEADER, MTE_ID);
-  next();
-});
 
 /**
  * Parse incoming request for cookies signed with this secret
  */
 server.use(cookieParser(COOKIE_SECRET));
 
-// reuse secure cookie id, or set a new one
+/**
+ * Middleware to set "x-mte-id" header and "mte-id" cookie
+ */
 server.use((req, res, next) => {
-  var date = new Date();
+  res.setHeader(MTE_ID_HEADER, MTE_ID);
+
+  const date = new Date();
   date.setDate(date.getDate() + 31 /*days*/);
   const idCookieValue = req.signedCookies[COOKIE_NAME] || makeId();
   res.cookie(COOKIE_NAME, idCookieValue, {
@@ -115,33 +113,15 @@ server.use((req, res, next) => {
     sameSite: "none", // allow all, secure must be true
     secure: true,
   });
+
   next();
 });
 
 // log incoming requests
 server.use(logger);
 
-// append "x-mte-id" header to all out going responses
-server.use((_req, res, next) => {
-  res.setHeader(MTE_ID_HEADER, MTE_ID);
-  next();
-});
-
-server.get(`/api/echo/:msg`, (req, res, next) => {
-  res.json({
-    status: 200,
-    message: `Echo: ${req.params.msg}`,
-  });
-});
-
-// fetch('http://localhost:3099/api/unique-devices-report', {
-//   headers: {
-//     authorization: 'Sg1hwXKl7kUTkz4w7TqhA1LhOeBm75f5'
-//   }
-// })
-
 // Unique devices report
-server.get("/api/unique-devices-report", async (req, res, next) => {
+server.get("/api/mte-report", async (req, res, next) => {
   try {
     // check for auth header
     const authHeaderToken = req.get("authorization");
@@ -173,8 +153,13 @@ server.get("/api/unique-devices-report", async (req, res, next) => {
   }
 });
 
+// returns headers only
+server.head("/api/mte-relay", (_req, res, _next) => {
+  res.status(200).send();
+});
+
 // MTE Pair Route
-server.post("/mte/pair", express.json(), async (req, res, next) => {
+server.post("/api/mte-pair", express.json(), async (req, res, next) => {
   try {
     console.log("Body:", JSON.stringify(req.body, null, 2));
     const clientId = req.signedCookies[COOKIE_NAME];
