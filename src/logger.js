@@ -1,31 +1,52 @@
-const morgan = require("morgan");
-var rfs = require("rotating-file-stream");
+const winston = require("winston");
 const path = require("path");
-const { COOKIE_NAME } = require("./settings");
+require("winston-daily-rotate-file");
+const { DEBUG } = require("./settings");
 
-// create a rotating write stream
-var accessLogStream = rfs.createStream("access.log", {
-  interval: "1d", // rotate daily
-  path: path.join(__dirname, "../logs/access-logs"),
+/**
+ * A logger that tracks all requests and logs to a special MTE log file
+ */
+const mteLogger = winston.createLogger({
+  format: winston.format.printf((info) => info.message),
+  transports: [
+    new winston.transports.DailyRotateFile({
+      maxFiles: "93d", // 3 months + 1 day of logs
+      zippedArchive: true,
+      datePattern: "YYYY-MM-DD-HH",
+      filename: "mte-relay-%DATE%.log",
+      dirname: path.join(__dirname, "../logs/mte-logs"),
+    }),
+  ],
 });
 
-morgan.token("mteId", function (req, res) {
-  const id = req.signedCookies
-    ? req.signedCookies?.[COOKIE_NAME] || "unknown"
-    : "unknown";
-  return id;
+// a custom formatter to try to print stack traces
+const formatter = winston.format.printf((info) => {
+  let str = `${info.level}: ${info.message}`;
+  if (info.stack) {
+    str += `\n${info.stack}`;
+  }
+  return str;
 });
 
-function createLog(tokens, req, res) {
-  return [
-    tokens.mteId(req, res),
-    tokens.method(req, res),
-    tokens.url(req, res),
-    tokens.status(req, res),
-    tokens.date(req, res, "iso"),
-  ].join(",");
-}
+/**
+ * A generic logger for all other messages
+ */
+const logger = winston.createLogger({
+  format: winston.format.simple(),
+  transports: [
+    new winston.transports.Console({
+      format: winston.format.combine(winston.format.colorize(), formatter),
+    }),
+    new winston.transports.DailyRotateFile({
+      level: DEBUG ? "debug" : "info",
+      maxFiles: "7d",
+      filename: "%DATE%.log",
+      datePattern: "YYYY-MM-DD-HH",
+      dirname: path.join(__dirname, "../logs/logs"),
 
-module.exports = {
-  logger: morgan(createLog, { stream: accessLogStream }),
-};
+      format: winston.format.combine(formatter),
+    }),
+  ],
+});
+
+module.exports = { logger, mteLogger };

@@ -21,7 +21,10 @@ const parsedYaml = yaml.parse(file);
     "reportAccessToken",
   ].forEach((key) => {
     if (!parsedYaml[key]) {
-      throw Error(`Key is missing from yaml, but is required: "${key}"`);
+      console.error(
+        `Required key "${key}" is missing from file "${yamlPath}"\nExiting program.`
+      );
+      process.exit(1);
     }
   });
 })();
@@ -41,4 +44,5 @@ module.exports = {
   CORS_METHODS: parsedYaml.corsMethods,
   ACCESS_TOKEN: parsedYaml.reportAccessToken,
   REDIS_URL: parsedYaml.redisConnectionString,
+  DEBUG: parsedYaml.debug || false,
 };

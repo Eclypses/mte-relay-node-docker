@@ -11,3 +11,4 @@ corsMethods:
   - <ALLOWED_CORS_HTTP_METHOD>
 reportAccessToken: <REPORT_ACCESS_TOKEN>
 redisConnectionString: <REDIS_CONNECTION_STRING>
+debug: <BOOLEAN>

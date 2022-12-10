@@ -9,6 +9,7 @@ const {
 } = require("./settings");
 const { mteEncode } = require("mte-helpers");
 const fs = require("fs");
+const { logger } = require("./logger");
 
 const proxy = httpProxy.createProxyServer({
   changeOrigin: true,
@@ -29,7 +30,7 @@ proxy.on("proxyRes", async (proxyRes, req, res) => {
     if (req.files?.length > 0) {
       req.files.forEach((file) => {
         fs.promises.rm(file.path).catch((err) => {
-          console.log("Error when trying to delete file: " + file.path);
+          logger.error("Error when trying to delete file: " + file.path);
         });
       });
     }
@@ -77,13 +78,13 @@ proxy.on("proxyRes", async (proxyRes, req, res) => {
         });
         res.end(encodedBody, "binary");
       } catch (err) {
-        console.log(err);
+        logger.error(err.message, err);
         res.writeHead(559);
         res.end(err.message);
       }
     });
   } catch (err) {
-    console.log(err);
+    logger.error(err.message, err);
     res.writeHead(500);
     res.end(err.message);
   }

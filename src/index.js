@@ -7,7 +7,7 @@ const multer = require("multer");
 const upload = multer({ dest: "uploads/", preservePath: true });
 const cookieParser = require("cookie-parser");
 const serverError = require("./custom-error");
-const { logger } = require("./logger");
+const { logger, mteLogger } = require("./logger");
 
 const { proxy } = require("./proxy");
 const { makeNonce } = require("./utils/nonce");
@@ -39,6 +39,7 @@ const { createClient } = require("redis");
 
 // run start up checks
 startupChecks();
+logger.debug("Start up checks passed");
 
 // if Redis is available, connect to it
 const hasRedisUrl = Boolean(REDIS_URL);
@@ -47,9 +48,15 @@ if (hasRedisUrl) {
   redisClient = createClient({
     url: REDIS_URL,
   });
-  redisClient.connect().then(() => {
-    console.log(`Connected to Redis`);
-  });
+  redisClient
+    .connect()
+    .then(() => {
+      logger.info("Connected to Redis.");
+    })
+    .catch((err) => {
+      logger.error("Failed to connect to Redis.", err.message);
+      throw Error(err.message);
+    });
 }
 
 // initialize MTE Wasm
@@ -72,9 +79,10 @@ instantiateMteWasm({
       }
     : undefined,
 }).catch((err) => {
-  console.log(`Error: Failed to instantiate MTE.`);
-  throw Error(err.message);
+  logger.error("Failed to instantiate MTE Wasm.", err);
+  process.exit(1);
 });
+logger.info("MTE Wasm initialized.");
 
 // create server instance
 const server = express();
@@ -91,6 +99,12 @@ server.use(
     exposedHeaders: [MTE_ID_HEADER, MTE_ENCODED_CONTENT_TYPE_HEADER_NAME],
   })
 );
+
+// log incoming requests
+server.use((req, res, next) => {
+  logger.debug(`${req.method} ${req.url}`);
+  next();
+});
 
 /**
  * Parse incoming request for cookies signed with this secret
@@ -114,11 +128,11 @@ server.use((req, res, next) => {
     secure: true,
   });
 
+  logger.debug("Request's Client ID: " + idCookieValue);
+  mteLogger.info(`${idCookieValue},${req.method},${req.url},${Date.now()}`);
+
   next();
 });
-
-// log incoming requests
-server.use(logger);
 
 // Unique devices report
 server.get("/api/mte-report", async (req, res, next) => {
@@ -148,7 +162,7 @@ server.get("/api/mte-report", async (req, res, next) => {
 
     res.send("ok");
   } catch (error) {
-    console.log(error);
+    logger.error(error.message, error);
     next(error);
   }
 });
@@ -161,7 +175,7 @@ server.head("/api/mte-relay", (_req, res, _next) => {
 // MTE Pair Route
 server.post("/api/mte-pair", express.json(), async (req, res, next) => {
   try {
-    console.log("Body:", JSON.stringify(req.body, null, 2));
+    logger.debug("Body:", JSON.stringify(req.body, null, 2));
     const clientId = req.signedCookies[COOKIE_NAME];
     if (!clientId) {
       return res.status(401).send("Unauthorized.");
@@ -173,14 +187,14 @@ server.post("/api/mte-pair", express.json(), async (req, res, next) => {
     const encoderEntropy = encoderEcdh.computeSharedSecret(
       req.body.decoderPublicKey
     );
-    console.log("Server Encoder Entropy:", encoderEntropy.toString());
+    logger.debug("Server Encoder Entropy:", encoderEntropy.toString());
 
     const decoderNonce = makeNonce();
     const decoderEcdh = await getEcdh();
     const decoderEntropy = decoderEcdh.computeSharedSecret(
       req.body.encoderPublicKey
     );
-    console.log("Server Decoder Entropy:", decoderEntropy.toString());
+    logger.debug("Server Decoder Entropy:", decoderEntropy.toString());
 
     // create initial encoder/decoder states
     createMteEncoder({
@@ -204,7 +218,6 @@ server.post("/api/mte-pair", express.json(), async (req, res, next) => {
       decoderPublicKey: decoderEcdh.publicKey,
     });
   } catch (err) {
-    console.log(err);
     const _error = new serverError(
       "An error occurred while generating MTE Pairing values.",
       500
@@ -246,7 +259,6 @@ server.use(
 
       return proxy.web(req, res);
     } catch (err) {
-      console.log(err);
       const _error = new serverError(
         "An error occurred while proxying the request.",
         500
@@ -259,8 +271,7 @@ server.use(
 // error handler
 server.use("/", (err, req, res, next) => {
   if (err) {
-    console.log("Error:", err.message);
-    console.log(err);
+    logger.warn(err.message, err);
     const status = err.status || 500;
     const msg = err.message || "An unknown error occurred.";
     return res.status(status).send(msg);
@@ -274,7 +285,7 @@ server.use((req, res) => {
 });
 
 server.listen(PORT, () => {
-  console.log(`MTE Proxy Translator listening on at localhost:${PORT}`);
+  logger.info(`MTE Proxy Translator listening on at localhost:${PORT}`);
 });
 
 /**
@@ -396,7 +407,7 @@ async function decodeMtePayloadMiddleware(req, res, next) {
           output: "str",
         }
       );
-      console.log("Decoded Content-Type Header:", decodedContentTypeHeader);
+      logger.debug("Decoded Content-Type Header:", decodedContentTypeHeader);
       req.decodedContentTypeHeader = decodedContentTypeHeader;
     }
 
@@ -428,12 +439,11 @@ async function decodeMtePayloadMiddleware(req, res, next) {
         ? "str"
         : "Uint8Array",
     });
-    console.log("Decoded Body:", decoded);
+    logger.debug("Decoded Body:", decoded);
     // attach decoded body to req object
     req.mteDecoded = decoded;
     next();
   } catch (err) {
-    console.log(err);
     const _err = new serverError("Failed to decode payload.", 559);
     next(_err);
   }

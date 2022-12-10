@@ -10,6 +10,7 @@ const fs = require("fs");
 const readline = require("readline");
 const path = require("path");
 const { LICENSE_COMPANY } = require("./settings");
+const { logger } = require("./logger");
 
 // path to reports directory
 const reportsDirPath = path.join(__dirname, "../logs/reports");
@@ -107,7 +108,7 @@ Total MTE Events:\t\t\t\t\t\t${totalTransactions}`
 
     return filePath;
   } catch (error) {
-    console.log(error);
+    logger.error(error.message, error);
   }
 }
 
