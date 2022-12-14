@@ -33,7 +33,7 @@ const {
   REDIS_URL,
 } = require("./settings");
 const { makeId } = require("./utils/make-id");
-const { parseLogFilesCountUinqueIds } = require("./report-unique-clients");
+const { writeMteReport } = require("./report-unique-clients");
 const { startupChecks } = require("./startup");
 const { createClient } = require("redis");
 
@@ -137,20 +137,10 @@ server.use((req, res, next) => {
 });
 
 // Unique devices report
-server.get("/api/mte-report", async (req, res, next) => {
+server.get("/api/mte-report/:authToken", async (req, res, next) => {
   try {
-    // check for auth header
-    const authHeaderToken = req.get("authorization");
-    if (!authHeaderToken) {
-      throw new serverError(
-        "Authorization header is missing, but is required.",
-        400
-      );
-    }
-
     // compare with known value
-    const hasAuth = authHeaderToken === ACCESS_TOKEN;
-    if (!hasAuth) {
+    if (req.params.authToken !== ACCESS_TOKEN) {
       throw new serverError("Unauthorized", 401);
     }
 
@@ -160,16 +150,20 @@ server.get("/api/mte-report", async (req, res, next) => {
       month = parseInt(req.query.month, 10);
     }
 
-    const reportFilePath = await parseLogFilesCountUinqueIds(month);
+    const { fileName, filePath } = await writeMteReport(month);
 
-    res.sendFile(reportFilePath);
-
-    fs.unlink(reportFilePath, (err) => {
+    res.download(filePath, fileName, (err) => {
       if (err) {
-        logger.error(`Failed to delete report`, err);
-      } else {
-        logger.info("Deleted the file successfully");
+        logger.error(err);
+        return next(err);
       }
+
+      logger.info("MTE Report downloaded: " + fileName);
+      fs.unlink(filePath, (err) => {
+        if (err) {
+          logger.error(`Failed to delete report`, err);
+        }
+      });
     });
   } catch (error) {
     logger.error(error.message, error);
@@ -185,7 +179,7 @@ server.head("/api/mte-relay", (_req, res, _next) => {
 // MTE Pair Route
 server.post("/api/mte-pair", express.json(), async (req, res, next) => {
   try {
-    logger.debug("Body:", JSON.stringify(req.body, null, 2));
+    logger.debug("Body:\n" + JSON.stringify(req.body, null, 2));
     const clientId = req.signedCookies[COOKIE_NAME];
     if (!clientId) {
       return res.status(401).send("Unauthorized.");
@@ -197,14 +191,14 @@ server.post("/api/mte-pair", express.json(), async (req, res, next) => {
     const encoderEntropy = encoderEcdh.computeSharedSecret(
       req.body.decoderPublicKey
     );
-    logger.debug("Server Encoder Entropy:", encoderEntropy.toString());
+    logger.debug("Server Encoder Entropy: " + encoderEntropy.toString());
 
     const decoderNonce = makeNonce();
     const decoderEcdh = await getEcdh();
     const decoderEntropy = decoderEcdh.computeSharedSecret(
       req.body.encoderPublicKey
     );
-    logger.debug("Server Decoder Entropy:", decoderEntropy.toString());
+    logger.debug("Server Decoder Entropy: " + decoderEntropy.toString());
 
     // create initial encoder/decoder states
     createMteEncoder({
@@ -417,7 +411,7 @@ async function decodeMtePayloadMiddleware(req, res, next) {
           output: "str",
         }
       );
-      logger.debug("Decoded Content-Type Header:", decodedContentTypeHeader);
+      logger.debug(`Decoded Content-Type Header: ${decodedContentTypeHeader}`);
       req.decodedContentTypeHeader = decodedContentTypeHeader;
     }
 
@@ -449,7 +443,7 @@ async function decodeMtePayloadMiddleware(req, res, next) {
         ? "str"
         : "Uint8Array",
     });
-    logger.debug("Decoded Body:", decoded);
+    logger.debug("Decoded Body: " + decoded);
     // attach decoded body to req object
     req.mteDecoded = decoded;
     next();

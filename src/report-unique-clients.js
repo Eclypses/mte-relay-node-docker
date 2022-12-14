@@ -12,7 +12,6 @@ const path = require("path");
 const { LICENSE_COMPANY } = require("./settings");
 
 // path to reports directory
-const reportsDirPath = path.join(__dirname, "../logs/reports");
 const logsDirPath = path.join(__dirname, "../logs/mte-logs");
 
 // an array of months; 1 = January
@@ -37,7 +36,7 @@ const months = [
  * @param {Number} month - the month to report on; 1 = January, 12 = December
  * @returns {String} - the path to the report file
  */
-async function parseLogFilesCountUinqueIds(requestedMonth) {
+async function writeMteReport(requestedMonth) {
   // validate requestedMonth
   if (requestedMonth < 1 || requestedMonth > 12) {
     throw new Error(
@@ -103,30 +102,34 @@ async function parseLogFilesCountUinqueIds(requestedMonth) {
     0
   );
 
-  // create a report file
+  // file data
   const date = new Date();
   const reportingMonth = months[requestedMonth];
-  const filePath = path.join(
-    reportsDirPath,
-    `${LICENSE_COMPANY}-${reportingMonth}-mte-report-${date.getTime()}.txt`
+  const fileName =
+    `${LICENSE_COMPANY}-mte-report-${reportingMonth}-${date.getTime()}.txt`
       .toLowerCase()
-      .replace(/\s-\s|\s/g, "-")
-  );
-  fs.promises.writeFile(
+      .replace(/\s-\s|\s/g, "-");
+  const filePath = path.join(logsDirPath, fileName);
+
+  // write the report file
+  await fs.promises.writeFile(
     filePath,
-    `MTE Usage Report
+    `MTE Usage Report 
 
-Company:\t\t\t\t\t\t\t\t\t\t${LICENSE_COMPANY}
-Reporting Month:\t\t\t\t\t\t${reportingMonth}
-Created:\t\t\t\t\t\t\t\t\t\t${date.toGMTString()}
+Company: ${LICENSE_COMPANY}
+Reporting Month: ${reportingMonth}
+Created: ${date.toGMTString()}
 
-Total Unique Device IDs:\t\t${totalUniqueIds}
-Total MTE Requests:\t\t\t\t\t${totalTransactions}`
+Total Unique Device IDs: ${totalUniqueIds}
+Total MTE Requests: ${totalTransactions}`
   );
 
-  return filePath;
+  return {
+    filePath,
+    fileName,
+  };
 }
 
 module.exports = {
-  parseLogFilesCountUinqueIds,
+  writeMteReport,
 };
