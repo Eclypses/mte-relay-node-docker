@@ -66,6 +66,8 @@ instantiateMteWasm({
   sequenceWindow: -63,
   encoderType: "MKE",
   decoderType: "MKE",
+  saveStateAs: "B64",
+  keepAlive: 3000,
   saveState: hasRedisUrl
     ? async function customSaveState(id, value) {
         return redisClient.set(id, value);
@@ -152,15 +154,23 @@ server.get("/api/mte-report", async (req, res, next) => {
       throw new serverError("Unauthorized", 401);
     }
 
-    // get month
+    // get month as number
     let month = new Date().getMonth() + 1;
     if (req.query.month) {
-      month = req.query.month;
+      month = parseInt(req.query.month, 10);
     }
 
-    const path = await parseLogFilesCountUinqueIds(month);
+    const reportFilePath = await parseLogFilesCountUinqueIds(month);
 
-    res.send("ok");
+    res.sendFile(reportFilePath);
+
+    fs.unlink(reportFilePath, (err) => {
+      if (err) {
+        logger.error(`Failed to delete report`, err);
+      } else {
+        logger.info("Deleted the file successfully");
+      }
+    });
   } catch (error) {
     logger.error(error.message, error);
     next(error);
